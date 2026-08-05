@@ -20,10 +20,10 @@ pub use split::split;
 
 const CHARVAL_NOM: f32 = 25.;
 const CHARVAL_MAX_DENOM: f32 = 5.;
-const FULL_MATCH_SCORE: f32 = 50.;
+const FULL_MATCH_SCORE: f32 = 120.;
 const CHAR_HIT_MULT: f32 = 2.;
 const CHAR_PART_HIT_MULT: f32 = 1.;
-const CHAR_MISS_PENALTY: f32 = -2.;
+const CHAR_MISS_PENALTY: f32 = -5.;
 const WORD_MATCH_SCORE: f32 = 20.;
 
 /// Creates a score of how much the input and the pattern match
