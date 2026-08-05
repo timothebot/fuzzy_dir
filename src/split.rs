@@ -1,5 +1,3 @@
-use std::ops::Not;
-
 /// Split a directory name into its parts.
 ///
 /// ```
@@ -11,25 +9,33 @@ use std::ops::Not;
 /// assert_eq!(split("hello\\ world"), vec!["hello", "world"]);
 /// assert_eq!(split("helloMy world"), vec!["hello", "My", "world"]);
 /// ```
-pub fn split(name: &str) -> Vec<String> {
-    let parsed_input = name
-        .replace("-", "_")
-        .replace("\\ ", "_")
-        .replace(" ", "_")
-        .replace("~", "_");
-    let mut previous_char = 'A';
-    let mut parsed_name = String::new();
-    for c in parsed_input.chars() {
-        if c.is_uppercase() && previous_char.is_lowercase() {
-            parsed_name.push('_');
+pub fn split(name: &str) -> Vec<&str> {
+    let mut res = Vec::new();
+    let mut flush = |start: usize, end: Option<usize>| {
+        if end.is_none_or(|end| end > start) {
+            let slice = end.map_or(&name[start..], |end| &name[start..end]);
+            res.push(slice);
         }
-        parsed_name.push(c);
-        previous_char = c;
+    };
+
+    let mut start = 0;
+    let mut prev_lower = false;
+    for (idx, char) in name.char_indices() {
+        if matches!(
+            name.as_bytes().get(idx..),
+            Some([b'_', ..] | [b'-', ..] | [b' ', ..] | [b'\\', b' ', ..] | [b'~', ..])
+        ) {
+            flush(start, Some(idx));
+            start = idx + 1;
+        } else if prev_lower && char.is_uppercase() {
+            flush(start, Some(idx));
+            start = idx;
+        }
+        prev_lower = char.is_lowercase();
     }
-    parsed_name
-        .split("_")
-        .filter_map(|s| s.is_empty().not().then_some(s.to_string()))
-        .collect()
+    flush(start, None);
+
+    res
 }
 
 #[cfg(test)]

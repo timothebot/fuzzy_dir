@@ -13,55 +13,97 @@
 //! more infos.
 
 mod split;
+
+use std::collections::HashMap;
+
 pub use split::split;
 
+const CHARVAL_NOM: f32 = 25.;
+const CHARVAL_MAX_DENOM: f32 = 5.;
+const FULL_MATCH_SCORE: f32 = 50.;
+const CHAR_HIT_MULT: f32 = 2.;
+const CHAR_PART_HIT_MULT: f32 = 1.;
+const CHAR_MISS_PENALTY: f32 = -2.;
+const WORD_MATCH_SCORE: f32 = 20.;
+
 /// Creates a score of how much the input and the pattern match
-///
 /// The higher the score the better. There is no max score.
-pub fn score_dir(input: &str, pattern: &str) -> i32 {
-    let char_value: i32 = (100. / pattern.len().max(3) as f32).round() as i32;
-    let mut score = 0;
-    if input
-        .to_lowercase()
-        .contains(pattern.to_lowercase().as_str())
-    {
-        score += pattern.len() as i32 * char_value;
-    }
+pub fn score_dir(input: &str, pattern: &str) -> u32 {
+    let words = split(input)
+        .iter()
+        .map(|word| word.chars().flat_map(|w| w.to_lowercase()).collect())
+        .collect::<Vec<Vec<_>>>();
+    let input = input.to_lowercase();
+    let pattern = pattern.to_lowercase();
+    let pat_chars = pattern.chars().map(Some).collect::<Vec<_>>();
 
-    let words = split(input);
+    let pat_len = pat_chars.len() as f32;
+    let char_value = CHARVAL_NOM / pat_len.max(CHARVAL_MAX_DENOM);
 
-    let mut dir_name_mut = input.to_lowercase();
-    let mut last_char: char = ' ';
-    for c in pattern.chars() {
-        if dir_name_mut.contains(c.to_ascii_lowercase()) {
-            score += char_value * 2;
-            // strip the char to avoid multiple matches
-            dir_name_mut = dir_name_mut.replacen(c, "", 1);
-        } else if input.to_lowercase().contains(c.to_ascii_lowercase()) {
-            // A letter that exists, even if it was taken already should be higher rated
-            score += char_value;
+    let whole_pattern_score = {
+        let for_containing = char_value * pat_len;
+        if input == pattern {
+            FULL_MATCH_SCORE + for_containing
+        } else if input.contains(&pattern) {
+            for_containing
         } else {
-            score -= char_value * 2;
+            0.
         }
+    };
 
-        if words.iter().any(|word| word.to_lowercase().starts_with(c)) {
-            score += char_value * 3;
-        }
-        if words.iter().any(|word| {
-            word.to_lowercase()
-                .starts_with(&format!("{}{}", c, last_char))
-        }) {
-            score += char_value * 4;
-        }
-        last_char = c;
+    let chars_score = {
+        let inp_frq = freqmap(input.chars());
+        let matches = freqmap(pat_chars.iter().filter_map(|&o| o)) // kill `Some`
+            .iter()
+            .map(|(&char, &pat_amt)| match inp_frq.get(&char) {
+                // Letter that exists and fully fits into the input
+                Some(&inp_amt) if pat_amt <= inp_amt => CHAR_HIT_MULT * pat_amt,
+                // Even if it was taken already should be higher rated
+                Some(&inp_amt) => {
+                    CHAR_PART_HIT_MULT * (pat_amt - inp_amt) + CHAR_HIT_MULT * inp_amt
+                }
+                None => CHAR_MISS_PENALTY * pat_amt,
+            })
+            .sum::<f32>();
+        char_value * matches
+    };
+
+    let words_score = {
+        let mut pat_chars = pat_chars;
+        let matches = words
+            .into_iter()
+            .map(|word| {
+                let (start, len) = (0..pat_chars.len())
+                    .map(|start| {
+                        (
+                            start,
+                            // Find the largest subslice
+                            word.iter()
+                                .zip(&pat_chars[start..])
+                                .take_while(|(wc, pc)| pc.is_some_and(|pc| pc == **wc))
+                                .count(),
+                        )
+                    })
+                    .max_by_key(|&(_, count)| count)
+                    .unwrap_or_default();
+
+                pat_chars[start..start + len].fill(None); // Zeroize it so one char doesn't trigger multiple times
+
+                (len as f32).sqrt() // First char gives the most score, others less and less
+            })
+            .sum::<f32>();
+        matches * WORD_MATCH_SCORE
+    };
+
+    (whole_pattern_score + chars_score + words_score).round() as u32
+}
+
+fn freqmap(chars: impl Iterator<Item = char>) -> HashMap<char, f32> {
+    let mut map = HashMap::with_capacity(chars.size_hint().0);
+    for char in chars {
+        *map.entry(char).or_default() += 1.;
     }
-    if input.to_lowercase() == pattern.to_lowercase() {
-        score += 50;
-    }
-    if score < 0 {
-        score = 0;
-    }
-    score
+    map
 }
 
 #[cfg(test)]
