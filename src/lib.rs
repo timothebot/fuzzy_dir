@@ -5,7 +5,7 @@
 //! ## Getting started
 //!
 //! ```rust
-//! let score: i32 = fuzzy_dir::score_dir("this_is_my_folder_name", "myfoldrnam");
+//! let score: u32 = fuzzy_dir::score_dir("this_is_my_folder_name", "myfoldrnam");
 //! ```
 //!
 //! This library also exports a split function which tries to split
